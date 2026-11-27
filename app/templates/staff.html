@@ -1,1 +1,113 @@
-
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Outlet 451 Staff</title><style>
+:root{--b:#1d4ed8;--bd:#1e40af;--g:#64748b;--l:#e2e8f0}*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#fff;color:#0f172a}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--l)}h1{font-size:20px;letter-spacing:.2em;margin:0}
+main{max-width:900px;margin:auto;padding:20px}nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+button{background:var(--b);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:600;cursor:pointer}button:hover{background:var(--bd)}button.o{background:#fff;color:var(--b);border:1px solid var(--b)}
+input,select{padding:10px;border:1px solid var(--l);border-radius:10px;width:100%;margin:4px 0}.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}.card{border:1px solid var(--l);border-radius:14px;padding:14px;box-shadow:0 1px 3px #0001}
+h2{font-size:15px;color:var(--g);text-transform:uppercase;letter-spacing:.1em}table{border-collapse:collapse;width:100%}td{border-bottom:1px solid var(--l);padding:6px;vertical-align:top}
+#err{color:#b91c1c}.pill{background:#dbeafe;color:var(--bd);border-radius:99px;padding:2px 10px;font-size:12px}@media print{header,nav,button,input{display:none}}
+.chip{color:#fff;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap}.pill{white-space:nowrap}</style></head><body><header><h1>STAFF</h1><button class="o" onclick="out()">Log out</button></header>
+<main><div id="err"></div><nav id="nav"></nav><div id="view"></div></main><script>
+const $=s=>document.querySelector(s),nxt={placed:'preparing',preparing:'ready',ready:'completed'};let me=null,tab='kitchen';
+const api=async(p,m='GET',b)=>{const r=await fetch('/api/'+p,{method:m,headers:{'Content-Type':'application/json'},body:b&&JSON.stringify(b)});const d=r.status==204?{}:await r.json();if(!r.ok)throw Error(d.error||'Error');return d};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),err=m=>$('#err').textContent=m||'',v=i=>$('#'+i).value;
+const kv=o=>'<table>'+Object.entries(o).map(([k,x])=>`<tr><td>${esc(k.replace(/_/g,' '))}</td><td>${x&&typeof x=='object'?kv(x):esc(x)}</td></tr>`).join('')+'</table>';
+const run=f=>async(...a)=>{try{err();await f(...a)}catch(e){err(e.message)}};
+async function init(){try{me=await api('me')}catch{return login()}const t=TABS[me.role];if(!t)return login('Staff access only');
+ $('#nav').innerHTML=t.map(k=>`<button class="o" onclick="show('${k}')">${LBL[k]}</button>`).join('');show(t[0])}
+function login(m){$('#nav').innerHTML='';$('#view').innerHTML=`<div class="card"><h2>Staff sign in</h2><input id="e" type="email" placeholder="Email"><input id="p" type="password" placeholder="Password"><button onclick="go()">Sign in</button></div>`;err(m)}
+const go=run(async()=>{await api('login','POST',{email:v('e'),password:v('p')});init()});
+async function out(){await api('logout','POST');login()}
+const show=run(async k=>{tab=k;await V[k]()});
+function finance(){const t=new Date().toISOString().slice(0,10);
+ $('#view').innerHTML=`<div class="row"><input id="f" type="date" value="${t.slice(0,8)}01"><input id="t" type="date" value="${t}"></div><div class="row">${[['income-statement','Income statement'],['cash-flow','Cash flow'],['balance-sheet','Balance sheet'],['daily','Daily']].map(([k,l])=>`<button class="o" onclick="rep('${k}')">${l}</button>`).join('')}<button onclick="print()">Print</button></div><div id="out"></div>
+ <h2>Record expense</h2><input id="ec" placeholder="Category (rent, utilities, supplies, tax_remittance)"><input id="ea" type="number" step=".01" placeholder="Amount"><input id="en" placeholder="Note"><button onclick="exp()">Save expense</button>`}
+const rep=run(async k=>{const q=k=='balance-sheet'?`?asof=${v('t')}`:k=='daily'?`?date=${v('t')}`:`?from=${v('f')}&to=${v('t')}`;$('#out').innerHTML=kv(await api('admin/reports/'+k+q))}),
+ exp=run(async()=>{await api('admin/expenses','POST',{category:v('ec'),amount:v('ea'),note:v('en')});err('Saved')});
+async function people(){const m=new Date().toISOString().slice(0,7),[es,ps]=await Promise.all([api('admin/employees'),api('admin/payroll?month='+m)]);
+ $('#view').innerHTML=`<h2>Employees</h2>${es.map(e=>`<div class="row"><span>${esc(e.name)} &middot; ${esc(e.position)}</span><span>$${e.salary}/mo</span></div>`).join('')}
+ <input id="en" placeholder="Name"><input id="ep" placeholder="Position"><input id="es" type="number" placeholder="Monthly salary"><input id="et" type="number" step=".01" placeholder="Tax rate (default 0.10)"><button onclick="addEmp()">Add employee</button>
+ <h2>Payroll</h2><div class="row"><input id="pm" type="month" value="${m}"><button onclick="runPay()">Run payroll</button></div>${kv(ps)}
+ <h2>Create staff login</h2><input id="un" placeholder="Name"><input id="ue" type="email" placeholder="Email"><input id="up" type="password" placeholder="Password (8+)"><select id="ur"><option>host</option><option>waiter</option><option>kitchen</option><option>chef</option><option>cashier</option><option>owner</option><option>admin</option></select><button onclick="addUser()">Create</button>`}
+const addEmp=run(async()=>{await api('admin/employees','POST',{name:v('en'),position:v('ep'),salary:v('es'),tax_rate:v('et')||0.1});people()}),
+ runPay=run(async()=>{await api('admin/payroll/run','POST',{month:v('pm')});people()}),addUser=run(async()=>{await api('admin/users','POST',{name:v('un'),email:v('ue'),password:v('up'),role:v('ur')});err('Created')});
+async function menu(){const m=await api('menu');$('#view').innerHTML=`<h2>Import CSV</h2><input id="csv" type="file" accept=".csv"><button onclick="imp()">Import</button><h2>Pricing &amp; discounts</h2>
+ ${m.map(i=>`<div class="row"><span>${esc(i.name)}</span><span><input id="p${i.id}" type="number" step=".01" value="${i.price}" style="width:90px"> <input id="d${i.id}" type="number" value="${i.discount_pct}" style="width:70px">% <button class="o" onclick="sv(${i.id})">Save</button></span></div>`).join('')}`}
+const sv=run(async i=>{await api('admin/menu/'+i,'PATCH',{price:v('p'+i),discount_pct:v('d'+i)});err('Saved')}),
+ imp=run(async()=>{const f=$('#csv').files[0];if(!f)return;const r=await fetch('/api/admin/menu/import',{method:'POST',body:await f.text()}),d=await r.json();if(!r.ok)throw Error(d.error);err('Imported '+d.imported);menu()});
+const LBL={party:'Party reservation',guests:'Guest analytics',host:'Host',floor:'Floor',kitchen:'Kitchen',chef:'Chef',analytics:'Analytics',people:'Employees',owner:'Owner',finance:'Finance',menu:'Menu'};
+const TABS={host:['host','party'],waiter:['floor'],cashier:['floor'],kitchen:['kitchen'],chef:['kitchen','chef'],owner:['owner','finance','analytics','guests','people','menu','party'],admin:['host','party','floor','kitchen','chef','analytics','guests','people','owner','finance','menu']};
+/* colour psychology: red=attention, amber=in progress, green=go/pick up, teal=moving, blue=calm/complete */
+const ST={new:['#dc2626','Waiting'],cooking:['#f59e0b','Cooking'],ready:['#16a34a','Ready to pick'],picked:['#0d9488','On the way'],served:['#2563eb','Served']};
+const COURSE={1:'Starter',2:'Drinks',3:'Main',4:'Dessert'},NXT={new:'Start',cooking:'Ready',ready:'Pick up',picked:'Deliver'},F=p=>'floor/'+p;
+const chip=s=>`<span class="chip" style="background:${ST[s][0]}">${ST[s][1]}</span>`,legend=Object.keys(ST).map(chip).join(' '),opt=(a,f)=>a.map(f).join('');
+const lnow=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16),ok=m=>$('#err').innerHTML=`<span style="color:#16a34a">${m}</span>`;
+const V={};
+const adv=run(async id=>{await api(F(`lines/${id}/advance`),'POST');await V[tab]()}),rush=run(async id=>{await api(F(`lines/${id}/rush`),'POST');chef()});
+V.host=host;async function host(){const[t,r]=await Promise.all([api(F('tables')),api(F('reservations'))]);
+ $('#view').innerHTML=`<h2>Tables</h2><div class="grid">${opt(t,x=>`<div class="card" style="border-left:6px solid ${x.held?'#7c3aed':x.tabs?'#dc2626':x.next?'#f59e0b':'#16a34a'}"><div class="row"><b>${esc(x.label)}</b><span>${x.seats} seats</span></div>
+ <small>${x.tabs?x.tabs+' open tab(s)':x.next?'Next booking '+esc(x.next):'Free'}</small>${x.tabs||x.held?(x.held?'<small>Held for party: '+esc(x.held)+'</small>':''):`<input id="g${x.id}" placeholder="Guest / party name"><button onclick="seat(${x.id})">Seat guests</button>`}
+ <div class="row"><input id="s${x.id}" type="number" min="1" value="${x.seats}" style="width:80px"><button class="o" onclick="setSeats(${x.id})">Set seats</button></div></div>`)}</div>
+ <h2>Add table</h2><div class="row"><input id="nl" placeholder="Label"><input id="ns" type="number" placeholder="Seats"><button onclick="addTable()">Add</button></div>
+ <h2>Reservations</h2><select id="rt">${opt(t,x=>`<option value="${x.id}">${esc(x.label)} (${x.seats})</option>`)}</select><input id="rn" placeholder="Name"><input id="rp" type="number" placeholder="Party size"><input id="rd" type="datetime-local"><button onclick="book()">Book</button>
+ ${opt(r,x=>`<div class="row"><span>${esc(x.starts)} &middot; ${esc(x.table)} &middot; ${esc(x.name)} (${x.party})</span><button class="o" onclick="cancelRes(${x.id})">Cancel</button></div>`)}`}
+const seat=run(async id=>{await api(F(`tables/${id}/seat`),'POST',{guest:v('g'+id),now:lnow()});host()}),setSeats=run(async id=>{await api(F('tables/'+id),'PATCH',{seats:+v('s'+id)});host()}),
+ addTable=run(async()=>{await api(F('tables'),'POST',{label:v('nl'),seats:+v('ns')});host()}),book=run(async()=>{await api(F('reservations'),'POST',{table_id:+v('rt'),name:v('rn'),party:+v('rp'),starts_at:v('rd')});host()}),
+ cancelRes=run(async id=>{await api(F('reservations/'+id),'DELETE');host()});
+V.floor=floor;async function floor(){const[tabs,menu]=await Promise.all([api(F('tabs')),api('menu')]),by={},w=['waiter','host','admin','owner'].includes(me.role);tabs.forEach(t=>(by[t.table]=by[t.table]||[]).push(t));
+ $('#view').innerHTML=`<div class="row">${legend}</div>`+(Object.entries(by).map(([tb,ts])=>`<h2>Table ${esc(tb)}</h2><div class="grid">${opt(ts,t=>`<div class="card"><div class="row"><b>${esc(t.guest)}</b><b>$${t.total.toFixed(2)}</b></div>
+ ${opt(t.lines,l=>`<div class="row" style="border-left:6px solid ${ST[l.status][0]};padding-left:8px"><span>${l.qty} x ${esc(l.name)} <small>${COURSE[l.rank]}</small></span><span>${chip(l.status)} ${w&&(l.status=='ready'||l.status=='picked')?`<button onclick="adv(${l.id})">${NXT[l.status]}</button>`:''}${w&&l.status=='new'?`<button class="o" onclick="rm(${l.id})">x</button>`:''}</span></div>`)||'<small>No items yet</small>'}
+ ${w?`<div class="row"><select id="i${t.id}">${opt(menu,m=>`<option value="${m.id}">${esc(m.name)}</option>`)}</select><input id="q${t.id}" type="number" value="1" min="1" style="width:70px"><button onclick="addLine(${t.id})">Add item</button></div>`:''}
+ ${t.can_pay?`<div class="row"><select id="m${t.id}"><option value="cash">Cash</option><option value="card">Card</option></select><input id="r${t.id}" placeholder="Cash tendered / card approval code"><button onclick="pay(${t.id})">Take payment</button></div>`:''}</div>`)}</div>
+ ${w?`<div class="row"><input id="c${ts[0].table_id}" placeholder="Add another client to this table"><button class="o" onclick="addClient(${ts[0].table_id})">Add client tab</button></div>`:''}`).join('')||'<p>No open tabs. Seat a table from the Host tab.</p>')}
+const rm=run(async id=>{await api(F('lines/'+id),'DELETE');floor()}),addLine=run(async id=>{await api(F(`tabs/${id}/lines`),'POST',{item_id:+v('i'+id),qty:+v('q'+id)});floor()}),
+ addClient=run(async id=>{await api(F(`tables/${id}/tabs`),'POST',{guest:v('c'+id)});floor()}),
+ pay=run(async id=>{const m=v('m'+id),x=v('r'+id),r=await api(F(`tabs/${id}/pay`),'POST',{method:m,tendered:m=='cash'?+x:null,reference:m=='card'?x:null});
+  ok(`Paid${r.change?'. Change due $'+r.change.toFixed(2):''} &middot; <a href="/api/floor/tabs/${id}/receipt" target="_blank">Print receipt</a>`);floor()});
+V.kitchen=kitchen;async function kitchen(){const[q,on]=await Promise.all([api(F('kitchen')),api('kitchen/orders').catch(()=>[])]),by={};q.forEach(l=>(by[l.table]=by[l.table]||[]).push(l));
+ $('#view').innerHTML=`<div class="row">${legend}</div>`+(Object.entries(by).map(([tb,ls])=>`<div class="card" style="margin-bottom:12px"><h2>Table ${esc(tb)}</h2>${opt(ls,l=>`<div class="row" style="border-left:6px solid ${ST[l.status][0]};padding-left:8px"><span><b>${l.qty} x ${esc(l.name)}</b> <small>${COURSE[l.rank]} &middot; ${esc(l.guest)} &middot; ${l.wait}m</small>${l.rush?' <span class="chip" style="background:#7c3aed">RUSH</span>':''}${l.note?'<br><small>'+esc(l.note)+'</small>':''}</span>
+ <span>${chip(l.status)} ${l.status=='ready'?'':l.fireable?`<button onclick="adv(${l.id})">${NXT[l.status]}</button>`:'<small>Waiting for earlier course</small>'}</span></div>`)}</div>`).join('')||'<p>Dine-in queue is clear.</p>')+
+ `<h2>Online orders</h2>${opt(on,o=>`<div class="row"><span>#${o.id} ${o.items.map(i=>i.qty+' x '+esc(i.name)).join(', ')}</span><span><span class="pill">${o.status}</span> <button onclick="oadv(${o.id})">Next</button></span></div>`)||'<small>None</small>'}`}
+const oadv=run(async id=>{await api(`kitchen/orders/${id}/advance`,'POST');kitchen()});
+V.chef=chef;async function chef(){const[q,ing,menu]=await Promise.all([api(F('kitchen')),api(F('ingredients')),api('menu')]);
+ $('#view').innerHTML=`<h2>Priority board</h2>${opt(q.filter(l=>l.status!='ready'),(l,i)=>`<div class="row"><span>${i+1}. T${esc(l.table)} &middot; ${l.qty} x ${esc(l.name)} <small>${COURSE[l.rank]} &middot; ${l.wait}m</small></span><span>${chip(l.status)} <button class="o" onclick="rush(${l.id})">${l.rush?'Unrush':'Rush'}</button></span></div>`)||'<p>Nothing queued.</p>'}
+ <h2>Ingredients</h2>${opt(ing,i=>`<div class="row"><span>${esc(i.name)} ${i.low?'<span class="chip" style="background:#dc2626">low</span>':''}</span><span>${i.stock} ${esc(i.unit)}</span></div>`)}
+ <div class="row"><input id="an" placeholder="Name"><input id="au" placeholder="Unit (kg, pcs)"><input id="as" type="number" step=".001" placeholder="Stock"><input id="al" type="number" step=".001" placeholder="Reorder level"><button onclick="addIng()">Add ingredient</button></div>
+ <h2>Recipe (per portion; 0 removes)</h2><div class="row"><select id="ri">${opt(menu,m=>`<option value="${m.id}">${esc(m.name)}</option>`)}</select><select id="rg">${opt(ing,i=>`<option value="${i.id}">${esc(i.name)}</option>`)}</select><input id="rq" type="number" step=".001" placeholder="Qty"><button onclick="setRecipe()">Save</button></div>`}
+const addIng=run(async()=>{await api(F('ingredients'),'POST',{name:v('an'),unit:v('au'),stock:v('as'),reorder_level:v('al')});chef()}),setRecipe=run(async()=>{await api(F('recipes'),'POST',{item_id:+v('ri'),ingredient_id:+v('rg'),qty:v('rq')});ok('Recipe saved')});
+V.analytics=analytics;async function analytics(){const a=await api('owner/analytics'),mx=Math.max(1,...a.daily.map(d=>d[1]));
+ $('#view').innerHTML=`<h2>Sales, last ${a.days} days</h2>${opt(a.daily,([d,x])=>`<div class="row"><small style="width:90px">${d}</small><div style="flex:1;background:#dbeafe;border-radius:6px"><div style="width:${x/mx*100}%;background:var(--b);height:14px;border-radius:6px"></div></div><small>$${x.toFixed(0)}</small></div>`)}${kv(a.summary)}`}
+V.owner=owner;async function owner(){const[c,ing,au]=await Promise.all([api('owner/commitments'),api(F('ingredients')),api('owner/audit')]),m=new Date().toISOString().slice(0,7);
+ $('#view').innerHTML=`<h2>Procurement</h2><div class="row"><select id="pi">${opt(ing,i=>`<option value="${i.id}">${esc(i.name)} (${i.stock} ${esc(i.unit)})</option>`)}</select><input id="pq" type="number" step=".001" placeholder="Qty"><input id="pc" type="number" step=".01" placeholder="Total cost"><input id="ps" placeholder="Supplier"><button onclick="buy()">Receive stock</button></div>
+ <h2>Rent, lease &amp; subscriptions</h2>${opt(c,x=>`<div class="row"><span>${esc(x.name)} <span class="pill">${x.kind}</span></span><span>$${x.amount}/mo</span></div>`)}
+ <div class="row"><input id="cn" placeholder="Name"><select id="ck"><option>rent</option><option>lease</option><option>subscription</option></select><input id="ca" type="number" step=".01" placeholder="Monthly amount"><button onclick="addCom()">Add</button></div>
+ <div class="row"><input id="cm" type="month" value="${m}"><button class="o" onclick="postCom()">Post month to expenses</button></div>
+ <h2>Audit log</h2>${opt(au,a=>`<div class="row"><small>${esc(a.at)} ${esc(a.kind)} ${esc(a.ref)}</small><small>${esc(a.body)}</small></div>`)}`}
+const buy=run(async()=>{await api('owner/procurement','POST',{ingredient_id:+v('pi'),qty:v('pq'),cost:v('pc'),supplier:v('ps')});owner()}),addCom=run(async()=>{await api('owner/commitments','POST',{name:v('cn'),kind:v('ck'),amount:v('ca')});owner()}),
+ postCom=run(async()=>{const r=await api('owner/commitments/post','POST',{month:v('cm')});ok('Posted '+r.posted+' expense(s)')});
+Object.assign(V,{people,finance,menu});
+setInterval(()=>{if(me&&V[tab]&&['host','floor','kitchen','chef'].includes(tab)&&!document.activeElement.matches('input,select'))V[tab]().catch(()=>0)},8000);
+const PS={reserved:['#f59e0b','Reserved'],active:['#16a34a','In progress'],open:['#2563eb','OPEN TO ALL']},GS={invited:['#f59e0b','Expected'],checked_in:['#16a34a','Checked in'],checked_out:['#2563eb','Checked out'],no_show:['#64748b','No-show']};
+const pchip=(m,s)=>`<span class="chip" style="background:${m[s][0]}">${m[s][1]}</span>`;let pid=null;
+async function party(){const[ps,tb]=await Promise.all([api('party/parties'),api(F('tables'))]);let d=null;if(pid)d=await api('party/parties/'+pid).catch(()=>{pid=null;return null});const adm=['admin','owner'].includes(me.role);
+ $('#view').innerHTML=`<h2>Party reservations</h2>${opt(ps,p=>`<div class="row"><span><b>${esc(p.name)}</b> &middot; ${p.date} &middot; ${p.seats} seats &middot; ${p.checked_in}/${p.invited} arrived</span><span>${pchip(PS,p.status)} <button class="o" onclick="pid=${p.id};party()">Open</button></span></div>`)||'<p>No parties yet.</p>'}
+ <h2>Reserve tables for a party</h2><div class="row"><input id="pn" placeholder="Party name"><input id="pd" type="date"></div><div>${opt(tb.filter(t=>!t.held&&!t.tabs),t=>`<label style="margin-right:12px"><input type="checkbox" class="pt" value="${t.id}" style="width:auto"> ${esc(t.label)} (${t.seats})</label>`)}</div><button onclick="newParty()">Reserve tables</button>`+(d?`<h2>${esc(d.name)} ${pchip(PS,d.status)}</h2>
+ <div class="row"><input id="csv" type="file" accept=".csv"><button onclick="impCsv()">Import guest list (CSV)</button><button class="o" onclick="arrange()">Auto-arrange seating</button>${adm?'<button class="o" onclick="passes()">Issue passes</button>':''}</div><div id="pass"></div>
+ <div class="row"><input id="gf" placeholder="First name"><input id="gl" placeholder="Last name"><input id="gt" placeholder="Tier (VIP, A-List)"><input id="gh" placeholder="Household ID"><input id="gd" placeholder="Dietary / allergies"><button onclick="addGuest()">Add guest</button></div>
+ ${opt(d.guests,g=>`<div class="card" style="margin:8px 0;border-left:6px solid ${GS[g.status][0]}"><div class="row"><b>#${g.no} ${esc(g.place)}</b>${pchip(GS,g.status)}</div><small>${esc(g.tier)} &middot; ${esc(g.group)} &middot; ${esc(g.role)} &middot; ${esc(g.category)} ${g.dietary?'<b style="color:#b91c1c">&#9888; '+esc(g.dietary)+'</b>':''}</small>
+ ${g.status=='invited'?`<div class="row"><select id="gt${g.id}"><option value="">Table</option>${opt(d.tables,t=>`<option value="${t.id}" ${t.id==g.table_id?'selected':''}>${esc(t.label)}</option>`)}</select><input id="gs${g.id}" type="number" min="1" value="${g.seat||''}" placeholder="Seat" style="width:80px"><button class="o" onclick="seatG(${g.id})">Save seat</button></div>
+ <div class="row"><input id="gc${g.id}" placeholder="Pass code" style="width:130px" autocomplete="off"><label><input id="gi${g.id}" type="checkbox" style="width:auto"> Photo ID checked</label><button onclick="checkIn(${g.id})">Check in</button><button class="o" onclick="noShow(${g.id})">No-show</button></div>${g.locked?`<b style="color:#b91c1c">LOCKED after failed attempts</b>`:''}${!g.has_pass?'<small>No pass issued yet</small>':''}${adm&&(g.locked||g.has_pass)?` <button class="o" onclick="unlock(${g.id})">Reset pass</button>`:''}`
+ :g.status=='checked_in'?`<div class="row"><small>${esc(g.table)} seat ${g.seat}. Orders go on the Floor tab as Privileged #${g.no}.</small><button onclick="checkOut(${g.id})">Check out</button></div>`:''}</div>`)}`:'')}
+const P=(p,b,m='POST')=>api('party/'+p,m,b);
+const newParty=run(async()=>{const r=await P('parties',{name:v('pn'),date:v('pd'),table_ids:[...document.querySelectorAll('.pt:checked')].map(x=>+x.value)});pid=r.id;party()}),
+ impCsv=run(async()=>{const f=$('#csv').files[0];if(!f)return;const r=await fetch(`/api/party/parties/${pid}/import`,{method:'POST',body:await f.text()}),j=await r.json();if(!r.ok)throw Error(j.error);party().then(()=>ok(`Imported ${j.imported}, skipped ${j.skipped} (declined or blank)`))}),
+ arrange=run(async()=>{await P(`parties/${pid}/arrange`);party()}),addGuest=run(async()=>{await P(`parties/${pid}/guests`,{first:v('gf'),last:v('gl'),tier:v('gt'),household:v('gh'),dietary:v('gd')});party()}),
+ passes=run(async()=>{const r=await P(`parties/${pid}/passes`);$('#pass').innerHTML='<div class="card"><b>One-time pass codes. Print or send them now; they cannot be shown again.</b>'+(opt(r,x=>`<div class="row"><span>#${x.no} ${esc(x.place)}</span><b>${x.code}</b></div>`)||'<p>Every guest already has a pass.</p>')+'<button onclick="print()">Print</button></div>'}),
+ seatG=run(async id=>{await P(`guests/${id}/seat`,{table_id:+v('gt'+id),seat_no:+v('gs'+id)},'PATCH');party()}),
+ checkIn=run(async id=>{await P(`guests/${id}/checkin`,{code:v('gc'+id),id_checked:$('#gi'+id).checked});party()}),checkOut=run(async id=>{await P(`guests/${id}/checkout`);party()}),
+ noShow=run(async id=>{await P(`guests/${id}/noshow`);party()}),unlock=run(async id=>{await P(`guests/${id}/unlock`);party()});
+async function guests(){$('#view').innerHTML='<h2>Guest analytics</h2>'+kv(await api('party/analytics'))}
+Object.assign(V,{party,guests});
+init();
+</script></body></html>
